@@ -163,6 +163,10 @@ class Prober(object):
         self.needs_homing = False
 
     def on(self):
+        # The printer doesn't necessarily need to be homed unless it was off
+        # but turning it on is a good sign that the user thought it might be off
+        # and expects it to be homed
+        self.needs_homing = True
         self.conn.send_gcode_string("M80")
     def off(self):
         self.needs_homing = True
