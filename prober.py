@@ -4,6 +4,7 @@ from __future__ import division, print_function
 import re
 import time
 import telnetlib
+import random
 import numpy as np
 
 host = "192.168.0.7"
@@ -198,20 +199,49 @@ class Prober(object):
                 return False
         return True
 
-    def probe_grid(self, n_side, force_rehome=False):
+    def probe_grid(self, n_side, force_rehome=False, order=None):
+        xs, ys, rs, ss = self.probe_grid_multi(n_side, 1,
+                                                   force_rehome=force_rehome,
+                                                   order=order)
+        return xs, ys, rs
+
+    def probe_grid_multi(self, n_side, n_repeat,
+                             force_rehome=False, order=None):
         xs = np.linspace(-self.probeable_radius,
                                  self.probeable_radius,
                                  n_side)
         ys = np.linspace(-self.probeable_radius,
                                     self.probeable_radius,
                                     n_side)
-        rs = np.ma.masked_array(np.zeros((n_side,n_side),dtype=float))
+        rs = np.ma.masked_array(np.zeros((n_side,n_side,n_repeat),dtype=float))
         rs[:,:] = np.ma.masked
 
-        for (i,x) in enumerate(xs):
-            for (j,y) in enumerate(ys):
-                if self.permitted(x,y):
-                    self.probe(x,y,force_rehome=force_rehome)
-                    rs[i,j] = self.probes[-1][2]
+        probe_pts = []
+        for k in range(n_repeat):
+            for (i,x) in enumerate(xs):
+                for (j,y) in enumerate(ys):
+                    if self.permitted(x,y):
+                        probe_pts.append((i,x,j,y,k))
 
-        return xs, ys, rs
+        if order == 'reverse':
+            probe_pts = probe_pts[::-1]
+        elif order == 'shuffle':
+            random.shuffle(probe_pts)
+        elif order is None:
+            pass
+        else:
+            raise ValueError("Unrecognized order: %s" % repr(order))
+        for (i,x,j,y,k) in probe_pts:
+            self.probe(x,y,force_rehome=force_rehome)
+            rs[i,j,k] = self.probes[-1][2]
+
+        return xs, ys, rs.mean(axis=-1), rs.std(axis=-1)
+
+def plot_bed_matrix(xs, ys, zs, zlabel="Z (mm)"):
+    import matplotlib.pyplot as plt
+    plt.viridis()
+    plt.contourf(xs,ys,zs.T)
+    plt.xlabel("X (mm)")
+    plt.ylabel("Y (mm)")
+    plt.gca().set_aspect('equal')
+    plt.colorbar(label=zlabel)
